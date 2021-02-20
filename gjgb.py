@@ -3,19 +3,22 @@ import sys
 import time
 import os
 import subprocess
+import psycopg2
 from flask import Flask, request, render_template,\
     redirect, send_file, send_from_directory,\
     url_for, jsonify
 from flask_sqlalchemy import SQLAlchemy
-from utils import calculateRank
 
 app = Flask(__name__)
 
 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///User.sqlite3'
+DATABASE_URL = os.environ['DATABASE_URL']
+app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
+conn = psycopg2.connect(DATABASE_URL, sslmode='require')
 
 db = SQLAlchemy(app)
+
 
 class User(db.Model):
     __tablename__ = "user"
@@ -33,7 +36,8 @@ class Scores(db.Model):
     __tablename__ = "scores"
     score = db.Column(db.Integer, primary_key=True)
     count = db.Column(db.Integer)
-    roflm = db.Column(db.Integer)
+    #roflm = db.Column(db.Integer) calculating this on the go makes no diff.
+    
     #this essentially is a vector, I do not have details regarding the score system 
     #therefore I'll assume it is 0 to ~13k integer
     #it speeds up the rank calculation.
@@ -81,4 +85,4 @@ def user_create():
         #fun begins here, db stuff.
             
 if __name__ == "__main__":
-    app.run(host='0.0.0.0',debug=True)
+    app.run(host='0.0.0.0')
