@@ -10,6 +10,9 @@ from flask import Flask, request, render_template,\
 from flask_sqlalchemy import SQLAlchemy
 
 def calculateRank (score):
+    #TODO count the rank using scores table
+    #could improve user creation time by 
+    #returning number of rows in user table +1
     return 0
 
 app = Flask(__name__)
@@ -65,7 +68,14 @@ def submit_score():
 
 @app.route('/user/profile/<user_guid>')
 def user_profile(user_guid):
-    return ''
+    try:
+        query = User.query.filter_by(guid=user_guid)
+        user = query.one()
+        data={'user_id':user.guid,"display_name":user.name,"points":user.score, "rank":user.rank}
+        return data,200
+    except:
+        data={'message':'user not found'}
+        return data,404 
 
 @app.route('/user/create', methods=['POST'])
 def user_create():
@@ -73,12 +83,14 @@ def user_create():
         country = ""
         #to avoid the warning caused by conditional variable definition
         try:
-            #get country from ip of the client, not reliable but I'm assuming it is not provided.
-            ip = request.environ.get('HTTP_X_REAL_IP', request.remote_addr)
-            country = subprocess.run(['curl', f'ipinfo.io/{str(ip)}', '-silent', '|', 'grep', '-iE', "'^ *\"country\":'", '|', 'awk', "'{print $2}'"],stoud=subprocess.PIPE)
-            country = country.stdout.decode('utf-8')[1:3].lower()
+            country = request.json["country"]
         except:
-            country = " "
+            try:
+                ip = request.environ.get('HTTP_X_REAL_IP', request.remote_addr)
+                country = subprocess.run(['curl', f'ipinfo.io/{str(ip)}', '-silent', '|', 'grep', '-iE', "'^ *\"country\":'", '|', 'awk', "'{print $2}'"],stoud=subprocess.PIPE)
+                country = country.stdout.decode('utf-8')[1:3].lower()
+            except:
+                country = " "
         try:
             user_id = request.json["user_id"]
             #I guess I'm supposed to generate the guid rather than frontend, will be this way for now
@@ -87,8 +99,9 @@ def user_create():
         except:
             data={'message':'missing parameters'}
             return data, 404
-        query = User.query.filter_by(guid=user_id)
         try:
+            query = User.query.filter_by(guid=user_id)
+            #TODO remove this query and generate guid
             user = query.one()
             data={'message':'an account with this guid already exists'}
             return data,418 
