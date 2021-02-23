@@ -9,6 +9,9 @@ from flask import Flask, request, render_template,\
     url_for, jsonify
 from flask_sqlalchemy import SQLAlchemy
 
+def calculateRank (score):
+    return 0
+
 app = Flask(__name__)
 
 
@@ -22,11 +25,11 @@ db = SQLAlchemy(app)
 
 class User(db.Model):
     __tablename__ = "user"
-    guid = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    guid = db.Column(db.String(100), primary_key=True)
     name = db.Column(db.String(100))
     score = db.Column(db.Integer)
     rank = db.Column(db.Integer)
-    country = db.Column(db.String(5))
+    country = db.Column(db.String(3))
     #keeping the database sorted by score would help 
     #as it lowers displaying rank to log(n) and 
     #insertion to O(n) as you shift the rest by one
@@ -64,25 +67,46 @@ def submit_score():
 def user_profile(user_guid):
     return ''
 
-@app.route('/user/create')
+@app.route('/user/create', methods=['POST'])
 def user_create():
     if request.method == 'POST':
-        country=""
+        country = ""
+        #to avoid the warning caused by conditional variable definition
         try:
+            #get country from ip of the client, not reliable but I'm assuming it is not provided.
             ip = request.environ.get('HTTP_X_REAL_IP', request.remote_addr)
-            #country = curl 'ipinfo.io/'+ip -silent | grep -iE '^ *"country":' | awk '{print $2}' 
-            country = country[1:3].lower()
+            country = subprocess.run(['curl', f'ipinfo.io/{str(ip)}', '-silent', '|', 'grep', '-iE', "'^ *\"country\":'", '|', 'awk', "'{print $2}'"],stoud=subprocess.PIPE)
+            country = country.stdout.decode('utf-8')[1:3].lower()
         except:
             country = " "
         try:
             user_id = request.json["user_id"]
+            #I guess I'm supposed to generate the guid rather than frontend, will be this way for now
             display_name = request.json["display_name"]
-            points = request.json["points"]
-            rank = request.json["rank"]
-            #this is stupid, I decide rank not you. I'll ignore it.
+            points = 0
         except:
-            return 404
-        #fun begins here, db stuff.
-            
+            data={'message':'missing parameters'}
+            return data, 404
+        query = User.query.filter_by(guid=user_id)
+        try:
+            user = query.one()
+            data={'message':'an account with this guid already exists'}
+            return data,418 
+            #teapot but there was an actual code for this
+            #TODO replace with proper error code
+        except: #sqlalchemy.orm.exc.NoResultFound #should be here, this is a bad idea
+            rank=calculateRank(int(points))
+            user = User(guid=str(user_id),name=str(display_name),score=int(points),rank=int(rank),country=str(country))
+            try:
+                db.session.add(user)
+                db.session.commit()
+                data={'user_id': user_id,"display_name":display_name,"points":int(points),"rank":int(rank)}
+                return data,200 
+                #This would be 302 but somehow it does not support request payload, did not happen before.
+            except:
+                data={'message':'something went wrong'}
+                return data,418 
+                #TODO replace with proper error code
+
 if __name__ == "__main__":
     app.run(host='0.0.0.0')
